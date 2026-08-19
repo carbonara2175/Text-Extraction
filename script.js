@@ -7,7 +7,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const elements = {
   input: document.querySelector("#file-input"), dropZone: document.querySelector("#drop-zone"),
   fileInfo: document.querySelector("#file-info"), fileName: document.querySelector("#file-name"),
-  extract: document.querySelector("#extract-button"), separators: document.querySelector("#show-separators"),
+  extract: document.querySelector("#extract-button"), format: document.querySelector("#format-text"),
+  separators: document.querySelector("#show-separators"),
   status: document.querySelector("#status"), result: document.querySelector("#result-text"),
   copy: document.querySelector("#copy-button"), clear: document.querySelector("#clear-button"),
   pageCount: document.querySelector("#page-count"), toast: document.querySelector("#toast")
@@ -70,19 +71,62 @@ function textItemsToString(items) {
   let previousY = null;
   for (const item of items) {
     const y = Math.round(item.transform[5]);
-    if (previousY !== null && Math.abs(y - previousY) > 4) text += "\n";
+    // 座標の変化とhasEOLが同じ行末を示す場合でも、改行は1個だけ追加します。
+    if (previousY !== null && Math.abs(y - previousY) > 4 && !text.endsWith("\n")) text += "\n";
     else if (text && !text.endsWith("\n") && !item.str.startsWith(" ")) text += " ";
     text += item.str;
-    if (item.hasEOL) text += "\n";
+    if (item.hasEOL && !text.endsWith("\n")) text += "\n";
     previousY = y;
   }
   return text.trim();
 }
 
+// 見た目の折り返しではなく、文書構造として残すべき行の始まりを判定します。
+function startsNewSection(line) {
+  return /^(?:[（(][^）)]+[）)]|附\s*則|第[0-9０-９一二三四五六七八九十百千]+(?:条|項|節|章|編)?(?:[\s　]|$)|[0-9０-９一二三四五六七八九十]+[.．、)）\s　]|[・●○■□◆◇▶▷※]|[-*]\s+)/.test(line);
+}
+
+function needsSpace(left, right) {
+  // 英数字の単語だけは、行をつなぐ際に単語間の空白を補います。日本語には空白を入れません。
+  return /[A-Za-z0-9]$/.test(left) && /^[A-Za-z0-9]/.test(right) ? " " : "";
+}
+
+// PDF上の折り返しをつなぎ、見出し・条項・箇条書き・元からある段落は残します。
+function formatExtractedText(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimEnd());
+  const formatted = [];
+  let paragraphBreak = false;
+
+  for (const originalLine of lines) {
+    const line = originalLine.trim();
+    if (!line) {
+      // 連続する空行は1つの段落区切りにまとめます。
+      paragraphBreak = formatted.length > 0;
+      continue;
+    }
+
+    const previous = formatted.at(-1);
+    const preserveBreak = startsNewSection(line) ||
+      (paragraphBreak && /[。！？!?：:]$/.test(previous || "")) ||
+      (previous && /[。！？!?]$/.test(previous) && /^[　 \t]/.test(originalLine));
+
+    if (!previous || preserveBreak) {
+      if (paragraphBreak && formatted.at(-1) !== "") formatted.push("");
+      formatted.push(line);
+    } else {
+      formatted[formatted.length - 1] += needsSpace(previous, line) + line;
+    }
+    paragraphBreak = false;
+  }
+
+  // 段落間は空行を1つだけ残し、3個以上の連続改行を作りません。
+  return formatted.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function renderResult() {
   elements.result.value = extractedPages.map((text, index) => {
     const separator = elements.separators.checked ? `--- ${index + 1}ページ目 ---\n\n` : "";
-    return separator + text;
+    return separator + (elements.format.checked ? formatExtractedText(text) : text);
   }).join("\n\n");
   elements.copy.disabled = !elements.result.value.trim();
 }
@@ -129,6 +173,11 @@ elements.separators.addEventListener("change", () => {
   if (extractedPages.length) renderResult();
 });
 
+elements.format.addEventListener("change", () => {
+  // 元の抽出結果は保持しているので、ON/OFFを切り替えてすぐ比較できます。
+  if (extractedPages.length) renderResult();
+});
+
 elements.result.addEventListener("input", () => { elements.copy.disabled = !elements.result.value.trim(); });
 
 elements.copy.addEventListener("click", async () => {
@@ -158,5 +207,6 @@ elements.clear.addEventListener("click", () => {
   elements.copy.disabled = true;
   elements.pageCount.hidden = true;
   elements.separators.checked = true;
+  elements.format.checked = true;
   setStatus();
 });
