@@ -39,7 +39,10 @@
       </div>
 
       <div class="extract-row">
-        <label class="checkbox"><input id="show-separators" type="checkbox" checked><span>ページ区切りを表示する</span></label>
+        <div class="extract-options" aria-label="抽出オプション">
+          <label class="checkbox"><input id="format-text" type="checkbox" checked><span>文章を整形する</span></label>
+          <label class="checkbox"><input id="show-separators" type="checkbox" checked><span>ページ区切りを表示する</span></label>
+        </div>
         <button id="extract-button" class="button primary extract" type="button" disabled>文章を抽出</button>
       </div>
       <p id="status" class="status" role="status" aria-live="polite"></p>
