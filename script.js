@@ -1,9 +1,10 @@
 // PDF.js本体とWorkerはCDNから読み込みます。PDFファイル自体がCDNへ送られることはありません。
 import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 import { formatExtractedText } from "./formatter.js";
+import { extractMathProtectedText } from "./math-formatter.js";
 
 // 次回の更新では、まずこの値を変更してください。画面とブラウザのタブへ反映されます。
-const APP_VERSION = "v1.2";
+const APP_VERSION = "v1.3";
 
 document.title = `PDF文章抽出 App. ${APP_VERSION}`;
 document.querySelector("#app-version").textContent = APP_VERSION;
@@ -15,6 +16,7 @@ const elements = {
   input: document.querySelector("#file-input"), dropZone: document.querySelector("#drop-zone"),
   fileInfo: document.querySelector("#file-info"), fileName: document.querySelector("#file-name"),
   extract: document.querySelector("#extract-button"), format: document.querySelector("#format-text"),
+  protectMath: document.querySelector("#protect-math"),
   separators: document.querySelector("#show-separators"),
   status: document.querySelector("#status"), result: document.querySelector("#result-text"),
   copy: document.querySelector("#copy-button"), clear: document.querySelector("#clear-button"),
@@ -91,7 +93,8 @@ function textItemsToString(items) {
 function renderResult() {
   elements.result.value = extractedPages.map((text, index) => {
     const separator = elements.separators.checked ? `--- ${index + 1}ページ目 ---\n\n` : "";
-    return separator + (elements.format.checked ? formatExtractedText(text) : text);
+    const source = elements.protectMath.checked ? text.protected : text.raw;
+    return separator + (elements.format.checked ? formatExtractedText(source) : source);
   }).join("\n\n");
   elements.copy.disabled = !elements.result.value.trim();
 }
@@ -110,9 +113,9 @@ elements.extract.addEventListener("click", async () => {
       setStatus(`${pageNumber} / ${pdf.numPages} ページを処理しています…`, false, true);
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      extractedPages.push(textItemsToString(content.items));
+      extractedPages.push({ raw: textItemsToString(content.items), protected: extractMathProtectedText(content.items) });
     }
-    if (!extractedPages.some((page) => page.trim())) {
+    if (!extractedPages.some((page) => page.raw.trim())) {
       extractedPages = [];
       elements.result.value = "";
       elements.pageCount.hidden = true;
@@ -140,6 +143,11 @@ elements.separators.addEventListener("change", () => {
 
 elements.format.addEventListener("change", () => {
   // 元の抽出結果は保持しているので、ON/OFFを切り替えてすぐ比較できます。
+  if (extractedPages.length) renderResult();
+});
+
+elements.protectMath.addEventListener("change", () => {
+  // OFFでは座標補正を行わず、従来のPDF.jsに近い結果へ戻せます。
   if (extractedPages.length) renderResult();
 });
 
@@ -173,5 +181,6 @@ elements.clear.addEventListener("click", () => {
   elements.pageCount.hidden = true;
   elements.separators.checked = true;
   elements.format.checked = true;
+  elements.protectMath.checked = true;
   setStatus();
 });
