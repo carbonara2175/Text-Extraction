@@ -10,6 +10,14 @@ function isLayoutSensitive(line) {
   return /\t|[|｜]|\S[ 　]{2,}\S/.test(line);
 }
 
+export function isLikelyMathLine(line) {
+  const signals = (line.match(/[=+−－×÷√∑∫≤≥πλΔαθ⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉′°]/g) || []).length;
+  const formulaWords = (line.match(/\b(?:sin|cos|tan)\b/gi) || []).length;
+  const numberOperators = /\d\s*[+−－×÷/=]\s*\d/.test(line) ? 2 : 0;
+  // キーワード1個だけでは文章を数式扱いせず、複数の根拠がある場合に保護します。
+  return signals + formulaWords + numberOperators >= 2;
+}
+
 function isLikelyTitle(line, index) {
   // 先頭かつ、タイトルでよく使う語尾を持つ短い行だけに限定して誤結合を避けます。
   return index === 0 && line.length <= 50 &&
@@ -28,6 +36,7 @@ export function formatExtractedText(text) {
   let contentIndex = 0;
   let previousWasTitle = false;
   let previousWasLayoutSensitive = false;
+  let previousWasMath = false;
 
   for (const originalLine of lines) {
     const line = originalLine.trim();
@@ -41,8 +50,9 @@ export function formatExtractedText(text) {
     const indented = /^[ \t　]/.test(originalLine);
     const currentIsLayoutSensitive = isLayoutSensitive(originalLine);
     const currentIsTitle = isLikelyTitle(line, contentIndex);
+    const currentIsMath = isLikelyMathLine(line);
     const preserveBreak = startsNewSection(line) || paragraphBreak || indented ||
-      previousWasTitle || currentIsLayoutSensitive || previousWasLayoutSensitive;
+      previousWasTitle || currentIsLayoutSensitive || previousWasLayoutSensitive || currentIsMath || previousWasMath;
 
     if (!previous || preserveBreak) {
       if (paragraphBreak && formatted.at(-1) !== "") formatted.push("");
@@ -55,6 +65,7 @@ export function formatExtractedText(text) {
     paragraphBreak = false;
     previousWasTitle = currentIsTitle;
     previousWasLayoutSensitive = currentIsLayoutSensitive;
+    previousWasMath = currentIsMath;
     contentIndex += 1;
   }
 
