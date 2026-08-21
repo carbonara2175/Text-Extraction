@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="PDFの文章をブラウザ内だけで抽出する無料ツールです。">
-  <title>PDF文章抽出 App. v1.3</title>
+  <title>PDF文章抽出 App. v1.4</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="header-inner">
       <div class="logo" aria-hidden="true">PDF</div>
       <div>
-        <h1>PDF文章抽出 <span>App. <span id="app-version">v1.3</span></span></h1>
+        <h1>PDF文章抽出 <span>App. <span id="app-version">v1.4</span></span></h1>
         <p>ファイルを送信せず、ブラウザの中だけで安全に文章を取り出します。</p>
       </div>
     </div>
@@ -40,6 +40,7 @@
 
       <div class="extract-row">
         <div class="extract-options" aria-label="抽出オプション">
+          <label class="checkbox"><input id="analyze-layout" type="checkbox" checked><span>レイアウトを解析する</span></label>
           <label class="checkbox"><input id="format-text" type="checkbox" checked><span>文章を整形する</span></label>
           <label class="checkbox"><input id="protect-math" type="checkbox" checked><span>数式を保護する</span></label>
           <label class="checkbox"><input id="show-separators" type="checkbox" checked><span>ページ区切りを表示する</span></label>

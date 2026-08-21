@@ -47,7 +47,9 @@ function normalizeMathSpacing(text) {
 
 export function detectMathItems(items) {
   const usable = items.filter((item) => item.str.trim());
-  const normalSize = median(usable.map((item) => item.size));
+  // 1行を単独で処理して添字が複数ある場合も、本文サイズを添字側へ引かれないようにします。
+  const sizes = usable.map((item) => item.size).sort((a, b) => a - b);
+  const normalSize = sizes[Math.floor(sizes.length * 0.75)] || 1;
   return usable.map((item) => ({ ...item, mathLike: /[=+−－×÷√∑∫≤≥πλΔαθ⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]|\b(?:sin|cos|tan)\b/i.test(item.str),
     small: item.size < normalSize * 0.86 }));
 }
