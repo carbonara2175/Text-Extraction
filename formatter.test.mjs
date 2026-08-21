@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatExtractedText, isLikelyMathLine } from "./formatter.js";
 import { extractMathProtectedText, removeDuplicateTextItems } from "./math-formatter.js";
+import { analyzePageLayout, linesToText } from "./layout-analyzer.js";
 
 test("本文途中の折り返しを結合する", () => {
   assert.equal(formatExtractedText("センターにおいて処理\nすることとし、その取扱いについては、"),
@@ -46,4 +47,28 @@ test("演算子の隣にある単純な上下ペアを安全な分数へ直す",
 test("数式行を通常文章の改行結合から保護する", () => {
   assert.equal(isLikelyMathLine("y = 3.0×10⁻⁴"), true);
   assert.equal(formatExtractedText("説明文です。\ny = 3.0×10⁻⁴\n次の説明です。"), "説明文です。\ny = 3.0×10⁻⁴\n次の説明です。");
+});
+
+test("全幅タイトルの後で左段を読み切ってから右段へ移る", () => {
+  const items = [pdfItem("物理試験", 20, 100, 10, 160), pdfItem("注意事項", 20, 88, 10, 160),
+    pdfItem("問題1", 20, 70, 10, 40), pdfItem("問題3", 120, 70, 10, 40),
+    pdfItem("問題2", 20, 55, 10, 40), pdfItem("問題4", 120, 55, 10, 40)];
+  const result = analyzePageLayout(items, 200);
+  assert.equal(result.isTwoColumn, true);
+  assert.equal(linesToText(result.lines, extractMathProtectedText), "物理試験\n注意事項\n問題1\n問題2\n問題3\n問題4");
+});
+
+test("中央の空白が不明瞭な通常文書は上から下、左から右を維持する", () => {
+  const items = [pdfItem("通常の長い本文", 20, 80, 10, 150), pdfItem("続きの本文", 20, 65, 10, 150),
+    pdfItem("さらに続く本文", 20, 50, 10, 150), pdfItem("末尾", 20, 35, 10, 150)];
+  const result = analyzePageLayout(items, 200);
+  assert.equal(result.isTwoColumn, false);
+  assert.equal(linesToText(result.lines, extractMathProtectedText), "通常の長い本文\n続きの本文\nさらに続く本文\n末尾");
+});
+
+test("レイアウト解析後も上付き・下付き文字を維持する", () => {
+  const items = [pdfItem("10", 20, 70, 10, 10), pdfItem("−", 30, 75, 6, 3), pdfItem("9", 33, 75, 6, 3),
+    pdfItem("S", 20, 55), pdfItem("1", 25, 52, 6, 3)];
+  const result = analyzePageLayout(items, 200);
+  assert.equal(linesToText(result.lines, extractMathProtectedText), "10⁻⁹\nS₁");
 });

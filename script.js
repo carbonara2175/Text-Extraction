@@ -2,9 +2,10 @@
 import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 import { formatExtractedText } from "./formatter.js";
 import { extractMathProtectedText } from "./math-formatter.js";
+import { analyzePageLayout, groupTextLines, linesToText } from "./layout-analyzer.js";
 
 // 次回の更新では、まずこの値を変更してください。画面とブラウザのタブへ反映されます。
-const APP_VERSION = "v1.3";
+const APP_VERSION = "v1.4";
 
 document.title = `PDF文章抽出 App. ${APP_VERSION}`;
 document.querySelector("#app-version").textContent = APP_VERSION;
@@ -17,6 +18,7 @@ const elements = {
   fileInfo: document.querySelector("#file-info"), fileName: document.querySelector("#file-name"),
   extract: document.querySelector("#extract-button"), format: document.querySelector("#format-text"),
   protectMath: document.querySelector("#protect-math"),
+  analyzeLayout: document.querySelector("#analyze-layout"),
   separators: document.querySelector("#show-separators"),
   status: document.querySelector("#status"), result: document.querySelector("#result-text"),
   copy: document.querySelector("#copy-button"), clear: document.querySelector("#clear-button"),
@@ -93,7 +95,8 @@ function textItemsToString(items) {
 function renderResult() {
   elements.result.value = extractedPages.map((text, index) => {
     const separator = elements.separators.checked ? `--- ${index + 1}ページ目 ---\n\n` : "";
-    const source = elements.protectMath.checked ? text.protected : text.raw;
+    const variant = elements.analyzeLayout.checked ? text.layout : text.original;
+    const source = elements.protectMath.checked ? variant.protected : variant.raw;
     return separator + (elements.format.checked ? formatExtractedText(source) : source);
   }).join("\n\n");
   elements.copy.disabled = !elements.result.value.trim();
@@ -113,9 +116,21 @@ elements.extract.addEventListener("click", async () => {
       setStatus(`${pageNumber} / ${pdf.numPages} ページを処理しています…`, false, true);
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      extractedPages.push({ raw: textItemsToString(content.items), protected: extractMathProtectedText(content.items) });
+      const viewport = page.getViewport({ scale: 1 });
+      // 取得→レイアウト解析→数式補正→文章整形（renderResult）の順に、処理を分離しています。
+      const analyzed = analyzePageLayout(content.items, viewport.width);
+      const originalLines = groupTextLines(content.items);
+      extractedPages.push({
+        original: { raw: textItemsToString(content.items), protected: extractMathProtectedText(content.items) },
+        layout: {
+          raw: linesToText(analyzed.lines, (items) => textItemsToString(items)),
+          // ページ全体を再ソートすると段が混ざるため、数式補正は読み順決定後に1行ずつ行います。
+          protected: linesToText(analyzed.lines, (items) => extractMathProtectedText(items))
+        },
+        hasText: originalLines.length > 0
+      });
     }
-    if (!extractedPages.some((page) => page.raw.trim())) {
+    if (!extractedPages.some((page) => page.hasText)) {
       extractedPages = [];
       elements.result.value = "";
       elements.pageCount.hidden = true;
@@ -151,6 +166,11 @@ elements.protectMath.addEventListener("change", () => {
   if (extractedPages.length) renderResult();
 });
 
+elements.analyzeLayout.addEventListener("change", () => {
+  // 誤判定したPDFではOFFにするだけでPDF.js本来の順番と比較できます。
+  if (extractedPages.length) renderResult();
+});
+
 elements.result.addEventListener("input", () => { elements.copy.disabled = !elements.result.value.trim(); });
 
 elements.copy.addEventListener("click", async () => {
@@ -182,5 +202,6 @@ elements.clear.addEventListener("click", () => {
   elements.separators.checked = true;
   elements.format.checked = true;
   elements.protectMath.checked = true;
+  elements.analyzeLayout.checked = true;
   setStatus();
 });
